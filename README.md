@@ -11,7 +11,7 @@ The robot stays in WiFi access point mode. Connect your phone or laptop to the r
 - Touch-friendly directional controls: forward, backward, left, right, stop.
 - Speed slider.
 - Safety timeout: if the browser stops sending commands, the robot stops.
-- Extra action buttons for home, hello, dance, push-up, and moonwalk.
+- Extra action buttons for rest pose, hello, dance, push-up, and moonwalk.
 - Non-blocking firmware loop so the web server keeps listening while the robot moves.
 
 ## Hardware Target
@@ -59,6 +59,8 @@ After upload:
 2. Connect to the `Kame-Remix` WiFi network.
 3. Open `http://192.168.4.1`.
 4. Hold a direction button to move; release to stop.
+
+The `Repos` button only returns the servos to their neutral standing pose. It is not spatial localization; the robot has no sensors here to know where it is in the room.
 
 ## Attribution
 

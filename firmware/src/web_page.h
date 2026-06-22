@@ -213,7 +213,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
         </div>
 
         <div class="actions">
-          <button data-action="home">Home</button>
+          <button data-action="home">Repos</button>
           <button data-action="hello">Hello</button>
           <button data-action="dance">Dance</button>
           <button data-action="pushup">Push-up</button>
