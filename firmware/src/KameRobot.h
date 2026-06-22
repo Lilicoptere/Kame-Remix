@@ -17,6 +17,17 @@ enum class ActionMode : uint8_t {
     Dance,
     PushUp,
     Moonwalk,
+    Bow,
+    Wiggle,
+    Stretch,
+    Patrol,
+    ShowOff,
+};
+
+enum class GaitStyle : uint8_t {
+    Normal,
+    Sneak,
+    Bounce,
 };
 
 class KameRobot {
@@ -28,16 +39,20 @@ public:
     void stop();
     void home();
     void action(ActionMode action);
+    void setGaitStyle(GaitStyle style);
 
     DriveMode driveMode() const;
     ActionMode actionMode() const;
+    GaitStyle gaitStyle() const;
     uint8_t speed() const;
     const char* modeName() const;
+    const char* gaitName() const;
 
 private:
     void writePose(const float pose[8]);
     void writeServo(uint8_t id, float angle);
     void buildDrivePose(float pose[8], uint32_t now);
+    void buildGaitPose(float pose[8], uint32_t elapsed, DriveMode mode, uint8_t speed) const;
     void buildActionPose(float pose[8], uint32_t now);
     void smoothToward(const float target[8]);
 
@@ -48,6 +63,7 @@ private:
     float _current[8];
     DriveMode _driveMode = DriveMode::Stop;
     ActionMode _actionMode = ActionMode::None;
+    GaitStyle _gaitStyle = GaitStyle::Normal;
     uint8_t _speed = 55;
     uint32_t _modeStartedAt = 0;
     uint32_t _actionStartedAt = 0;

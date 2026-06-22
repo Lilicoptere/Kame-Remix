@@ -26,6 +26,9 @@ String jsonState() {
     json += robot.modeName();
     json += "\",\"speed\":";
     json += robot.speed();
+    json += ",\"gait\":\"";
+    json += robot.gaitName();
+    json += "\"";
     json += ",\"ip\":\"";
     json += WiFi.softAPIP().toString();
     json += "\"}";
@@ -45,7 +48,18 @@ ActionMode parseActionMode(const String& name) {
     if (name == "dance") return ActionMode::Dance;
     if (name == "pushup") return ActionMode::PushUp;
     if (name == "moonwalk") return ActionMode::Moonwalk;
+    if (name == "bow") return ActionMode::Bow;
+    if (name == "wiggle") return ActionMode::Wiggle;
+    if (name == "stretch") return ActionMode::Stretch;
+    if (name == "patrol") return ActionMode::Patrol;
+    if (name == "showtime") return ActionMode::ShowOff;
     return ActionMode::None;
+}
+
+GaitStyle parseGaitStyle(const String& name) {
+    if (name == "sneak") return GaitStyle::Sneak;
+    if (name == "bounce") return GaitStyle::Bounce;
+    return GaitStyle::Normal;
 }
 
 void sendJson(uint16_t code, const String& json) {
@@ -93,6 +107,11 @@ void handleAction() {
     sendJson(200, jsonState());
 }
 
+void handleGait() {
+    robot.setGaitStyle(parseGaitStyle(server.arg("style")));
+    sendJson(200, jsonState());
+}
+
 void handleNotFound() {
     sendJson(404, "{\"error\":\"not found\"}");
 }
@@ -108,6 +127,7 @@ void bindRoutes() {
     server.on("/api/state", HTTP_GET, handleState);
     server.on("/api/drive", HTTP_POST, handleDrive);
     server.on("/api/action", HTTP_POST, handleAction);
+    server.on("/api/gait", HTTP_POST, handleGait);
     server.onNotFound(handleNotFound);
 }
 }

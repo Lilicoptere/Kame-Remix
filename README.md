@@ -10,9 +10,21 @@ The robot stays in WiFi access point mode. Connect your phone or laptop to the r
 - Embedded web page served by the robot at `http://192.168.4.1`.
 - Touch-friendly directional controls: forward, backward, left, right, stop.
 - Speed slider.
+- Three gait styles: `Normal`, `Furtif`, and `Bond`.
+- Temporary `Turbo` button while a direction is held.
 - Safety timeout: if the browser stops sending commands, the robot stops.
-- Extra action buttons for rest pose, hello, dance, push-up, and moonwalk.
+- Extra action buttons for rest pose, hello, bow, wiggle, stretch, dance, push-up, moonwalk, patrol, and showtime.
 - Non-blocking firmware loop so the web server keeps listening while the robot moves.
+
+## Remote Functions
+
+- `Normal`: balanced walking.
+- `Furtif`: slower and lower gait for careful movement.
+- `Bond`: higher, more playful gait.
+- `Turbo`: temporarily raises speed to 100% while held.
+- `Patrouille`: short autonomous routine that walks and turns.
+- `Showtime`: a little combined performance using several poses.
+- `Bip`: phone/browser-side beep and vibration only; the robot needs a buzzer if you want real onboard sound.
 
 ## Hardware Target
 
@@ -59,6 +71,7 @@ After upload:
 2. Connect to the `Kame-Remix` WiFi network.
 3. Open `http://192.168.4.1`.
 4. Hold a direction button to move; release to stop.
+5. Tap `Stop` to cancel any autonomous routine.
 
 The `Repos` button only returns the servos to their neutral standing pose. It is not spatial localization; the robot has no sensors here to know where it is in the room.
 

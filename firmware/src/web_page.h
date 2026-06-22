@@ -57,6 +57,12 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       letter-spacing: 0;
     }
 
+    .statusGrid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(92px, 1fr));
+      gap: 8px;
+    }
+
     .status {
       min-width: 104px;
       padding: 10px 12px;
@@ -133,7 +139,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       gap: 16px;
     }
 
-    .speedBox {
+    .speedBox, .gaitBox, .utilityBox {
       display: grid;
       gap: 10px;
     }
@@ -152,9 +158,32 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       accent-color: var(--accent);
     }
 
+    .gaitButtons, .utilityButtons {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .gaitButtons button, .utilityButtons button {
+      min-height: 46px;
+      padding: 0 10px;
+      color: #e8f2ff;
+      background: #243140;
+    }
+
+    .gaitButtons button.active {
+      background: var(--accent);
+      color: #061018;
+    }
+
+    .utilityButtons button[data-local="turbo"] {
+      background: #3a2a17;
+      color: #ffe2b5;
+    }
+
     .actions {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 10px;
     }
 
@@ -182,6 +211,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       .remote { grid-template-columns: 1fr; }
       .dpad { grid-template-rows: repeat(3, minmax(74px, 1fr)); }
       header { align-items: flex-start; }
+      .actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -189,7 +219,10 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
   <main>
     <header>
       <h1>Kame Remix</h1>
-      <div class="status">mode<strong id="mode">stop</strong></div>
+      <div class="statusGrid">
+        <div class="status">mode<strong id="mode">stop</strong></div>
+        <div class="status">marche<strong id="gait">normal</strong></div>
+      </div>
     </header>
 
     <section class="remote">
@@ -212,15 +245,39 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
           <input id="speed" type="range" min="20" max="100" value="55">
         </div>
 
+        <div class="gaitBox">
+          <div class="speedRow">
+            <span>Style</span>
+            <span id="styleHint">Stable</span>
+          </div>
+          <div class="gaitButtons">
+            <button data-gait="normal" class="active">Normal</button>
+            <button data-gait="sneak">Furtif</button>
+            <button data-gait="bounce">Bond</button>
+          </div>
+        </div>
+
+        <div class="utilityBox">
+          <div class="utilityButtons">
+            <button data-local="turbo">Turbo</button>
+            <button data-local="horn">Bip</button>
+            <button data-action="patrol">Patrouille</button>
+          </div>
+        </div>
+
         <div class="actions">
           <button data-action="home">Repos</button>
           <button data-action="hello">Hello</button>
+          <button data-action="bow">Reverence</button>
+          <button data-action="wiggle">Remue</button>
+          <button data-action="stretch">Etire</button>
           <button data-action="dance">Dance</button>
           <button data-action="pushup">Push-up</button>
           <button data-action="moonwalk">Moonwalk</button>
+          <button data-action="showtime">Showtime</button>
         </div>
 
-        <p class="hint">Garde un bouton directionnel appuye pour rouler. Relache pour stopper. Les fleches clavier et WASD marchent aussi.</p>
+        <p class="hint">Garde une direction appuyee pour rouler. Turbo monte la vitesse tant que tu le tiens. Patrouille et Showtime sont autonomes, Stop coupe tout.</p>
       </aside>
     </section>
   </main>
@@ -229,10 +286,14 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
     const modeEl = document.getElementById('mode');
     const speedEl = document.getElementById('speed');
     const speedValueEl = document.getElementById('speedValue');
+    const gaitEl = document.getElementById('gait');
+    const styleHintEl = document.getElementById('styleHint');
     const driveButtons = [...document.querySelectorAll('[data-drive]')];
+    const gaitButtons = [...document.querySelectorAll('[data-gait]')];
     let repeatTimer = null;
     let activeButton = null;
     let activeCommand = 'stop';
+    let turboRestore = null;
 
     function speed() {
       return Number(speedEl.value || 55);
@@ -252,7 +313,26 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
     async function drive(command) {
       activeCommand = command;
       const data = await request(`/api/drive?cmd=${encodeURIComponent(command)}&speed=${speed()}`, { method: 'POST' });
-      if (data && data.mode) modeEl.textContent = data.mode;
+      updateState(data);
+    }
+
+    function updateState(data) {
+      if (!data) return;
+      if (data.mode) modeEl.textContent = data.mode;
+      if (data.gait) {
+        gaitEl.textContent = data.gait;
+        gaitButtons.forEach(button => button.classList.toggle('active', button.dataset.gait === data.gait));
+        styleHintEl.textContent = data.gait === 'sneak' ? 'Discret' : data.gait === 'bounce' ? 'Joueur' : 'Stable';
+      }
+      if (data.speed && document.activeElement !== speedEl) {
+        speedValueEl.textContent = data.speed;
+      }
+    }
+
+    async function setGait(style) {
+      const data = await request(`/api/gait?style=${encodeURIComponent(style)}`, { method: 'POST' });
+      updateState(data);
+      if (activeCommand !== 'stop') drive(activeCommand);
     }
 
     function clearActiveButton() {
@@ -297,8 +377,63 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
         stopRepeat(false);
         const action = button.dataset.action;
         const data = await request(`/api/action?name=${encodeURIComponent(action)}`, { method: 'POST' });
-        if (data && data.mode) modeEl.textContent = data.mode;
+        updateState(data);
       });
+    });
+
+    gaitButtons.forEach(button => {
+      button.addEventListener('click', () => setGait(button.dataset.gait));
+    });
+
+    function localHorn() {
+      if ('vibrate' in navigator) navigator.vibrate([45, 30, 45]);
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      const ctx = new AudioContext();
+      const oscillator = ctx.createOscillator();
+      const gain = ctx.createGain();
+      oscillator.type = 'square';
+      oscillator.frequency.value = 440;
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.08, ctx.currentTime + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+      oscillator.connect(gain);
+      gain.connect(ctx.destination);
+      oscillator.start();
+      oscillator.stop(ctx.currentTime + 0.2);
+    }
+
+    document.querySelectorAll('[data-local]').forEach(button => {
+      if (button.dataset.local === 'horn') {
+        button.addEventListener('click', localHorn);
+      }
+      if (button.dataset.local === 'turbo') {
+        button.addEventListener('pointerdown', event => {
+          event.preventDefault();
+          turboRestore = speed();
+          speedEl.value = 100;
+          speedValueEl.textContent = 100;
+          button.classList.add('active');
+          if (activeCommand !== 'stop') drive(activeCommand);
+        });
+        button.addEventListener('pointerup', () => {
+          if (turboRestore !== null) {
+            speedEl.value = turboRestore;
+            speedValueEl.textContent = turboRestore;
+            turboRestore = null;
+          }
+          button.classList.remove('active');
+          if (activeCommand !== 'stop') drive(activeCommand);
+        });
+        button.addEventListener('pointercancel', () => {
+          button.classList.remove('active');
+          if (turboRestore !== null) {
+            speedEl.value = turboRestore;
+            speedValueEl.textContent = turboRestore;
+            turboRestore = null;
+          }
+        });
+      }
     });
 
     const keyMap = {
@@ -344,9 +479,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
 
     setInterval(async () => {
       const data = await request('/api/state');
-      if (data && data.mode) {
-        modeEl.textContent = data.mode;
-      }
+      updateState(data);
     }, 1200);
   </script>
 </body>
