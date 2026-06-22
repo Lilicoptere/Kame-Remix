@@ -1,13 +1,17 @@
 #include "KameRobot.h"
 
+#include <EEPROM.h>
 #include <math.h>
 #include <string.h>
 
 namespace {
-constexpr uint8_t SERVO_COUNT = 8;
+constexpr uint8_t SERVO_COUNT = KameRobot::ServoCount;
 constexpr uint16_t FRAME_MS = 16;
 constexpr uint16_t SERVO_MIN_US = 544;
 constexpr uint16_t SERVO_MAX_US = 2400;
+constexpr size_t CALIBRATION_EEPROM_SIZE = 64;
+constexpr uint32_t CALIBRATION_MAGIC = 0x4B524D58; // KRMX
+constexpr uint8_t CALIBRATION_VERSION = 1;
 
 const uint8_t SERVO_PINS[SERVO_COUNT] = {
     D1, D4, D8, D6, D7, D5, D2, D3
@@ -17,12 +21,12 @@ const float HOME_POSE[SERVO_COUNT] = {
     108, 72, 56, 124, 72, 108, 124, 56
 };
 
-const float TRIM[SERVO_COUNT] = {
-    0, 0, 0, 0, 0, 0, 0, 0
-};
-
-const bool REVERSED[SERVO_COUNT] = {
-    false, false, false, false, false, false, false, false
+struct __attribute__((packed)) CalibrationStore {
+    uint32_t magic;
+    uint8_t version;
+    int8_t trim[SERVO_COUNT];
+    uint8_t reversedMask;
+    uint8_t checksum;
 };
 
 float clampAngle(float value) {
@@ -44,12 +48,35 @@ float phaseToRad(float phaseDeg) {
 float positive(float value) {
     return value > 0.0f ? value : 0.0f;
 }
+
+int8_t clampTrim(int value) {
+    if (value < -45) return -45;
+    if (value > 45) return 45;
+    return (int8_t)value;
+}
+
+uint8_t checksumStore(const CalibrationStore& store) {
+    const uint8_t* bytes = reinterpret_cast<const uint8_t*>(&store);
+    uint8_t checksum = 0;
+    for (size_t i = 0; i < sizeof(CalibrationStore) - 1; i++) {
+        checksum ^= bytes[i];
+    }
+    return checksum;
+}
+
+bool isValidServo(uint8_t id) {
+    return id < SERVO_COUNT;
+}
 }
 
 void KameRobot::begin() {
+    applyDefaultCalibration();
+    loadCalibration();
+
     for (uint8_t i = 0; i < SERVO_COUNT; i++) {
         _servo[i].attach(SERVO_PINS[i]);
         _current[i] = HOME_POSE[i];
+        _calibrationPose[i] = HOME_POSE[i];
         writeServo(i, HOME_POSE[i]);
     }
 }
@@ -62,7 +89,9 @@ void KameRobot::tick() {
     _lastFrameAt = now;
 
     float target[SERVO_COUNT];
-    if (_actionMode != ActionMode::None) {
+    if (_calibrationMode) {
+        memcpy(target, _calibrationPose, sizeof(target));
+    } else if (_actionMode != ActionMode::None) {
         buildActionPose(target, now);
     } else if (_driveMode != DriveMode::Stop) {
         buildDrivePose(target, now);
@@ -77,12 +106,14 @@ void KameRobot::drive(DriveMode mode, uint8_t speed) {
     if (_driveMode != mode || _actionMode != ActionMode::None) {
         _modeStartedAt = millis();
     }
+    _calibrationMode = false;
     _actionMode = ActionMode::None;
     _driveMode = mode;
     _speed = constrain(speed, 20, 100);
 }
 
 void KameRobot::stop() {
+    _calibrationMode = false;
     _driveMode = DriveMode::Stop;
     _actionMode = ActionMode::None;
     _modeStartedAt = millis();
@@ -94,6 +125,7 @@ void KameRobot::home() {
 }
 
 void KameRobot::action(ActionMode action) {
+    _calibrationMode = false;
     _driveMode = DriveMode::Stop;
     _actionMode = action;
     _actionStartedAt = millis();
@@ -101,6 +133,74 @@ void KameRobot::action(ActionMode action) {
 
 void KameRobot::setGaitStyle(GaitStyle style) {
     _gaitStyle = style;
+}
+
+void KameRobot::enterCalibration() {
+    stop();
+    _calibrationMode = true;
+    memcpy(_calibrationPose, HOME_POSE, sizeof(_calibrationPose));
+    writePose(_calibrationPose);
+}
+
+void KameRobot::exitCalibration() {
+    _calibrationMode = false;
+    home();
+}
+
+void KameRobot::calibrationNeutral() {
+    _calibrationMode = true;
+    memcpy(_calibrationPose, HOME_POSE, sizeof(_calibrationPose));
+}
+
+void KameRobot::setCalibrationServo(uint8_t id, float angle) {
+    if (!isValidServo(id)) {
+        return;
+    }
+    _calibrationMode = true;
+    _calibrationPose[id] = clampAngle(angle);
+}
+
+void KameRobot::setTrim(uint8_t id, int8_t trim) {
+    if (!isValidServo(id)) {
+        return;
+    }
+    _trim[id] = clampTrim(trim);
+}
+
+void KameRobot::setReversed(uint8_t id, bool reversed) {
+    if (!isValidServo(id)) {
+        return;
+    }
+    _reversed[id] = reversed;
+}
+
+void KameRobot::resetCalibration() {
+    applyDefaultCalibration();
+    calibrationNeutral();
+}
+
+bool KameRobot::saveCalibration() {
+    CalibrationStore store;
+    memset(&store, 0, sizeof(store));
+    store.magic = CALIBRATION_MAGIC;
+    store.version = CALIBRATION_VERSION;
+
+    uint8_t reversedMask = 0;
+    for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+        store.trim[i] = _trim[i];
+        if (_reversed[i]) {
+            reversedMask |= (1 << i);
+        }
+    }
+    store.reversedMask = reversedMask;
+    store.checksum = checksumStore(store);
+
+    EEPROM.put(0, store);
+    const bool ok = EEPROM.commit();
+    if (ok) {
+        _calibrationLoaded = true;
+    }
+    return ok;
 }
 
 DriveMode KameRobot::driveMode() const {
@@ -113,6 +213,22 @@ ActionMode KameRobot::actionMode() const {
 
 GaitStyle KameRobot::gaitStyle() const {
     return _gaitStyle;
+}
+
+bool KameRobot::calibrationMode() const {
+    return _calibrationMode;
+}
+
+bool KameRobot::calibrationLoaded() const {
+    return _calibrationLoaded;
+}
+
+int8_t KameRobot::trim(uint8_t id) const {
+    return isValidServo(id) ? _trim[id] : 0;
+}
+
+bool KameRobot::reversed(uint8_t id) const {
+    return isValidServo(id) ? _reversed[id] : false;
 }
 
 uint8_t KameRobot::speed() const {
@@ -164,8 +280,8 @@ void KameRobot::writePose(const float pose[8]) {
 }
 
 void KameRobot::writeServo(uint8_t id, float angle) {
-    angle = clampAngle(angle + TRIM[id]);
-    if (REVERSED[id]) {
+    angle = clampAngle(angle + _trim[id]);
+    if (_reversed[id]) {
         angle = 180.0f - angle;
     }
     _servo[id].writeMicroseconds(angleToMicros(angle));
@@ -411,4 +527,32 @@ float KameRobot::wave(uint32_t now, float periodMs, float phaseDeg) const {
 int KameRobot::angleToMicros(float angle) const {
     angle = clampAngle(angle);
     return SERVO_MIN_US + (int)((angle / 180.0f) * (SERVO_MAX_US - SERVO_MIN_US));
+}
+
+void KameRobot::loadCalibration() {
+    EEPROM.begin(CALIBRATION_EEPROM_SIZE);
+
+    CalibrationStore store;
+    EEPROM.get(0, store);
+
+    if (store.magic != CALIBRATION_MAGIC ||
+        store.version != CALIBRATION_VERSION ||
+        store.checksum != checksumStore(store)) {
+        _calibrationLoaded = false;
+        return;
+    }
+
+    for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+        _trim[i] = clampTrim(store.trim[i]);
+        _reversed[i] = (store.reversedMask & (1 << i)) != 0;
+    }
+    _calibrationLoaded = true;
+}
+
+void KameRobot::applyDefaultCalibration() {
+    for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+        _trim[i] = 0;
+        _reversed[i] = false;
+    }
+    _calibrationLoaded = false;
 }

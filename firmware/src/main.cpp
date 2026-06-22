@@ -3,6 +3,7 @@
 #include <ESP8266WiFi.h>
 
 #include "KameRobot.h"
+#include "calibration_page.h"
 #include "web_page.h"
 
 namespace {
@@ -25,13 +26,43 @@ String jsonState() {
     json += "\"mode\":\"";
     json += robot.modeName();
     json += "\",\"speed\":";
-    json += robot.speed();
+    json += (int)robot.speed();
     json += ",\"gait\":\"";
     json += robot.gaitName();
     json += "\"";
     json += ",\"ip\":\"";
     json += WiFi.softAPIP().toString();
     json += "\"}";
+    return json;
+}
+
+String calibrationJson(const String& extra = "") {
+    String json = "{";
+    if (extra.length() > 0) {
+        json += extra;
+        json += ",";
+    }
+
+    json += "\"loaded\":";
+    json += robot.calibrationLoaded() ? "true" : "false";
+    json += ",\"mode\":\"";
+    json += robot.modeName();
+    json += "\",\"servos\":[";
+
+    for (uint8_t i = 0; i < KameRobot::ServoCount; i++) {
+        if (i > 0) {
+            json += ",";
+        }
+        json += "{\"id\":";
+        json += (int)i;
+        json += ",\"trim\":";
+        json += (int)robot.trim(i);
+        json += ",\"reversed\":";
+        json += robot.reversed(i) ? "true" : "false";
+        json += "}";
+    }
+
+    json += "]}";
     return json;
 }
 
@@ -71,8 +102,18 @@ void handleRoot() {
     server.send_P(200, "text/html; charset=utf-8", INDEX_HTML);
 }
 
+void handleCalibrationPage() {
+    robot.enterCalibration();
+    server.send_P(200, "text/html; charset=utf-8", CALIBRATION_HTML);
+}
+
 void handleState() {
     sendJson(200, jsonState());
+}
+
+void handleCalibrationState() {
+    robot.enterCalibration();
+    sendJson(200, calibrationJson());
 }
 
 void handleDrive() {
@@ -112,6 +153,48 @@ void handleGait() {
     sendJson(200, jsonState());
 }
 
+void handleCalibrationSet() {
+    const uint8_t id = constrain(server.arg("id").toInt(), 0, KameRobot::ServoCount - 1);
+    const int8_t trim = constrain(server.arg("trim").toInt(), -30, 30);
+    const String reverseArg = server.arg("reverse");
+    const bool reversed = reverseArg == "1" || reverseArg == "true";
+
+    robot.enterCalibration();
+    robot.setTrim(id, trim);
+    robot.setReversed(id, reversed);
+    sendJson(200, calibrationJson());
+}
+
+void handleCalibrationTest() {
+    const uint8_t id = constrain(server.arg("id").toInt(), 0, KameRobot::ServoCount - 1);
+    const float angle = constrain(server.arg("angle").toFloat(), 45.0f, 135.0f);
+
+    robot.enterCalibration();
+    robot.setCalibrationServo(id, angle);
+    sendJson(200, calibrationJson());
+}
+
+void handleCalibrationNeutral() {
+    robot.calibrationNeutral();
+    sendJson(200, calibrationJson());
+}
+
+void handleCalibrationSave() {
+    robot.enterCalibration();
+    const bool saved = robot.saveCalibration();
+    sendJson(200, calibrationJson(saved ? "\"saved\":true" : "\"saved\":false"));
+}
+
+void handleCalibrationReset() {
+    robot.resetCalibration();
+    sendJson(200, calibrationJson("\"reset\":true"));
+}
+
+void handleCalibrationExit() {
+    robot.exitCalibration();
+    sendJson(200, jsonState());
+}
+
 void handleNotFound() {
     sendJson(404, "{\"error\":\"not found\"}");
 }
@@ -124,10 +207,18 @@ void startAccessPoint() {
 
 void bindRoutes() {
     server.on("/", HTTP_GET, handleRoot);
+    server.on("/calibration", HTTP_GET, handleCalibrationPage);
     server.on("/api/state", HTTP_GET, handleState);
     server.on("/api/drive", HTTP_POST, handleDrive);
     server.on("/api/action", HTTP_POST, handleAction);
     server.on("/api/gait", HTTP_POST, handleGait);
+    server.on("/api/calibration/state", HTTP_GET, handleCalibrationState);
+    server.on("/api/calibration/set", HTTP_POST, handleCalibrationSet);
+    server.on("/api/calibration/test", HTTP_POST, handleCalibrationTest);
+    server.on("/api/calibration/neutral", HTTP_POST, handleCalibrationNeutral);
+    server.on("/api/calibration/save", HTTP_POST, handleCalibrationSave);
+    server.on("/api/calibration/reset", HTTP_POST, handleCalibrationReset);
+    server.on("/api/calibration/exit", HTTP_POST, handleCalibrationExit);
     server.onNotFound(handleNotFound);
 }
 }

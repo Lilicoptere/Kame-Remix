@@ -14,6 +14,7 @@ The robot stays in WiFi access point mode. Connect your phone or laptop to the r
 - Temporary `Turbo` button while a direction is held.
 - Safety timeout: if the browser stops sending commands, the robot stops.
 - Extra action buttons for rest pose, hello, bow, wiggle, stretch, dance, push-up, moonwalk, patrol, and showtime.
+- Servo calibration page with live offsets, reverse toggles, test positions, and EEPROM save.
 - Non-blocking firmware loop so the web server keeps listening while the robot moves.
 
 ## Remote Functions
@@ -25,6 +26,23 @@ The robot stays in WiFi access point mode. Connect your phone or laptop to the r
 - `Patrouille`: short autonomous routine that walks and turns.
 - `Showtime`: a little combined performance using several poses.
 - `Bip`: phone/browser-side beep and vibration only; the robot needs a buzzer if you want real onboard sound.
+
+## Servo Calibration
+
+Open `http://192.168.4.1/calibration` or tap `Calibration` from the remote.
+
+Calibration mode stops the normal movement routines and holds the robot in a neutral pose while you tune each servo.
+
+For every servo `S0` to `S7`, you can:
+
+- adjust the trim offset from `-30` to `+30` degrees;
+- reverse the servo direction;
+- test positions at `60`, `90`, and `120` degrees;
+- return all servos to the neutral pose.
+
+Tap `Sauvegarder` to write the offsets and reverse flags to ESP8266 EEPROM. The saved values are loaded again after reboot.
+
+`Reset live` resets the current calibration values on screen and on the robot, but you still need to tap `Sauvegarder` if you want that reset to persist.
 
 ## Hardware Target
 

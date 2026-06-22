@@ -104,7 +104,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       max-height: 520px;
     }
 
-    button {
+    button, a.button {
       border: 0;
       border-radius: 8px;
       color: var(--text);
@@ -112,10 +112,13 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
       font: inherit;
       font-weight: 800;
       cursor: pointer;
+      text-decoration: none;
+      display: grid;
+      place-items: center;
       box-shadow: inset 0 0 0 1px var(--line);
     }
 
-    button:active, button.active {
+    button:active, button.active, a.button:active {
       transform: translateY(1px);
       background: var(--accent-2);
       color: #061018;
@@ -160,11 +163,11 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
 
     .gaitButtons, .utilityButtons {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
     }
 
-    .gaitButtons button, .utilityButtons button {
+    .gaitButtons button, .utilityButtons button, .utilityButtons a.button {
       min-height: 46px;
       padding: 0 10px;
       color: #e8f2ff;
@@ -262,6 +265,7 @@ const char INDEX_HTML[] PROGMEM = R"HTML(
             <button data-local="turbo">Turbo</button>
             <button data-local="horn">Bip</button>
             <button data-action="patrol">Patrouille</button>
+            <a class="button" href="/calibration">Calibration</a>
           </div>
         </div>
 
